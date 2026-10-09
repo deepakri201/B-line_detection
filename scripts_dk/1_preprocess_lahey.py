@@ -526,6 +526,46 @@ def check_test_output(stem: str, rater: str, destination: str) -> None:
     print(f'Output: {destination}')
 
 
+def stem_output_started(stem: str, destination: str) -> bool:
+    """
+    Args:
+        stem:  clip name.
+        destination:  output directory.
+
+    Returns:
+        started:  True when this clip already has images, masks, or a meta file.
+    """
+    if os.path.isfile(os.path.join(destination, 'meta', f'{stem}.json')):
+        return True
+    if os.path.isdir(os.path.join(destination, 'images', stem)):
+        return True
+    masks_root = os.path.join(destination, 'masks')
+    if not os.path.isdir(masks_root):
+        return False
+    for rater in os.listdir(masks_root):
+        if os.path.isdir(os.path.join(masks_root, rater, stem)):
+            return True
+    return False
+
+
+def pending_stems(stems: list, destination: str) -> list:
+    """
+    Args:
+        stems:  clip names in processing order.
+        destination:  output directory.
+
+    Returns:
+        remaining:  clips still to process. The last clip that already has output is included again.
+    """
+    last_started = None
+    for stem in stems:
+        if stem_output_started(stem, destination):
+            last_started = stem
+    if last_started is None:
+        return list(stems)
+    return list(stems[stems.index(last_started):])
+
+
 def process_stem(stem: str, dicom_paths: list, annotation_paths: list, destination: str = None) -> None:
     """
     Decode one clip, write its frames once, and write one mask per annotated frame and rater.
@@ -643,13 +683,22 @@ def main() -> None:
     stems = sorted(set(dicoms) | set(annotations))
     print(f'{len(dicoms)} clips, {sum(len(v) for v in annotations.values())} JSON files')
 
-    for stem in tqdm(stems):
+    work = []
+    for stem in stems:
         if stem not in dicoms:
             print(f'Warning: {stem} has JSON annotations and no DICOM.')
             continue
         if stem not in annotations:
             print(f'Warning: {stem} has a DICOM and no JSON.')
             continue
+        work.append(stem)
+
+    pending = pending_stems(work, output_root)
+    skipped = len(work) - len(pending)
+    if skipped:
+        print(f'Skipping {skipped} clips already written. Repeating {pending[0]} and continuing.')
+
+    for stem in tqdm(pending):
         process_stem(stem, dicoms[stem], annotations[stem])
 
     print(f'Wrote images, masks, and meta to {output_root}')
