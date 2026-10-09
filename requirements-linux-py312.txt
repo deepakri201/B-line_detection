@@ -1,0 +1,53 @@
+# Linux x86_64, Python 3.12, NVIDIA GPU (including T4).
+# requirements-mac.txt stays the Python 3.11 CPU/MPS stack.
+# requirements.txt stays the paper's CUDA 10.2 environment.
+#
+#   python3.12 -m venv .venv
+#   source .venv/bin/activate
+#   pip install -r requirements-linux-py312.txt
+#
+# The default Linux torch wheel is CUDA 12.1. nvidia-smi must report CUDA 12.1
+# or newer. For a driver that only supports CUDA 11.8 through 12.0, install the
+# 11.8 wheels first, then this file:
+#
+#   pip install torch==2.2.2 torchvision==0.17.2 --index-url https://download.pytorch.org/whl/cu118
+#
+# Torch 2.2 is the first release with Python 3.12 wheels. Torchvision 0.17
+# dropped the pretrained= argument, so building a new model in models/ will
+# fail. Loading the released segmentation checkpoints with torch.load still works.
+# segmentation-models-pytorch stays at 0.2.1 so those checkpoints unpickle.
+# scikit-image 0.22 is the first Python 3.12 release. It dropped selem=, so
+# utils/labelset_utils.py cannot build training labels on this stack. The Lahey
+# scripts use disk and resize, which are unchanged.
+# GIF export needs the gifsicle binary: sudo apt install gifsicle
+
+numpy==1.26.4
+scipy==1.11.4
+matplotlib==3.8.4
+pandas==2.2.2
+Pillow==10.4.0
+imageio==2.34.2
+imageio-ffmpeg==0.5.1
+scikit-image==0.22.0
+scikit-learn==1.5.2
+natsort==8.4.0
+tqdm==4.66.5
+pygeoif==1.1.0
+polarTransform==2.0.0
+SimpleITK==2.4.1
+openpyxl==3.1.5
+pygifsicle==1.0.4
+python-pptx==1.0.2
+pydicom==3.0.2
+
+torch==2.2.2
+torchvision==0.17.2
+torchinfo==1.8.0
+efficientnet-pytorch==0.6.3
+pretrainedmodels==0.7.4
+timm==0.4.12
+segmentation-models-pytorch==0.2.1
+
+ttach==0.0.3
+opencv-python==4.10.0.84
+grad-cam==1.4.8
