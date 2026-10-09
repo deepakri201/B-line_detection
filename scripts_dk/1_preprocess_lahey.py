@@ -614,11 +614,16 @@ def process_stem(stem: str, dicom_paths: list, annotation_paths: list, destinati
 
 
 def main() -> None:
+    global input_root, output_root
     parser = argparse.ArgumentParser(description='Preprocess Lahey DICOMs and B-line annotations.')
+    parser.add_argument('--input-root', default=input_root, help='Directory of rater folders containing DICOM and JSON files.')
+    parser.add_argument('--output-root', default=output_root, help='Directory for images, masks, and meta.')
     parser.add_argument('--test', action='store_true', help='Process one clip from one annotator and check the outputs.')
     parser.add_argument('--rater', default=test_rater, help='Annotator to use with --test, for example andrew.')
     parser.add_argument('--stem', default=test_stem, help='Clip stem to use with --test. Defaults to the first clip with B-lines.')
     args = parser.parse_args()
+    input_root = args.input_root
+    output_root = args.output_root
     run_test = args.test or test_one_clip
 
     if not os.path.isdir(input_root):
