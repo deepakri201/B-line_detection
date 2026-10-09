@@ -233,12 +233,21 @@ def select_test_case(model_name: str, rater: str, stem: str) -> tuple:
 
 
 def main() -> None:
+    global images_root, masks_root, predictions_root, movies_root
     parser = argparse.ArgumentParser(description='Make side-by-side ground-truth and prediction movies.')
+    parser.add_argument('--images-root', default=images_root, help='Directory of preprocessed clip folders.')
+    parser.add_argument('--masks-root', default=masks_root, help='Directory of per-rater ground-truth masks.')
+    parser.add_argument('--predictions-root', default=predictions_root, help='Directory of predicted masks.')
+    parser.add_argument('--movies-root', default=movies_root, help='Directory for side-by-side movies.')
     parser.add_argument('--test', action='store_true', help='Write one movie for one model, rater, and clip.')
     parser.add_argument('--model', default=test_model, help='Prediction folder to use. Defaults to every available model.')
     parser.add_argument('--rater', default=test_rater, help='Annotator to use. Defaults to every rater.')
     parser.add_argument('--stem', default=test_stem, help='Clip stem to use. Defaults to every clip.')
     args = parser.parse_args()
+    images_root = args.images_root
+    masks_root = args.masks_root
+    predictions_root = args.predictions_root
+    movies_root = args.movies_root
 
     for path, label in ((images_root, 'images'), (masks_root, 'masks'), (predictions_root, 'predictions')):
         if not os.path.isdir(path):

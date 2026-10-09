@@ -319,12 +319,19 @@ def run_experiment(model_name: str, frame_paths: list, device: str, output_root:
 
 
 def main() -> None:
+    global images_root, predictions_root, model_dir
     parser = argparse.ArgumentParser(description='Run segmentation inference on preprocessed Lahey frames.')
+    parser.add_argument('--images-root', default=images_root, help='Directory of preprocessed clip folders.')
+    parser.add_argument('--predictions-root', default=predictions_root, help='Directory for predicted masks.')
+    parser.add_argument('--model-dir', default=model_dir, help='Directory of pixel-level segmentation checkpoints.')
     parser.add_argument('--test', action='store_true', help='Run one model on one clip from one annotator and check the masks.')
     parser.add_argument('--model', default=test_model, help='Segmentation experiment to use with --test.')
     parser.add_argument('--rater', default=test_rater, help='Annotator to use with --test, for example andrew.')
     parser.add_argument('--stem', default=test_stem, help='Clip stem to use with --test.')
     args = parser.parse_args()
+    images_root = args.images_root
+    predictions_root = args.predictions_root
+    model_dir = args.model_dir
     run_test = args.test or test_one_clip
 
     if not os.path.isdir(images_root):

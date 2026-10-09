@@ -14,6 +14,7 @@ and one frame-level sheet per rater.
 import os
 import sys
 import json
+import argparse
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 import numpy as np
@@ -319,6 +320,20 @@ def evaluate_model(model_name: str, meta: dict) -> None:
 
 
 def main() -> None:
+    global processed_root, masks_root, predictions_root, meta_root, results_root
+    parser = argparse.ArgumentParser(description='Compare predicted B-line masks with each rater.')
+    parser.add_argument('--processed-root', default=processed_root, help='Data directory that contains processed/, predictions/, and evaluation/.')
+    parser.add_argument('--masks-root', default=None, help='Rater masks. Defaults to {processed-root}/processed/masks.')
+    parser.add_argument('--predictions-root', default=None, help='Predicted masks. Defaults to {processed-root}/predictions.')
+    parser.add_argument('--meta-root', default=None, help='Clip sidecars. Defaults to {processed-root}/processed/meta.')
+    parser.add_argument('--results-root', default=None, help='Excel output. Defaults to {processed-root}/evaluation.')
+    args = parser.parse_args()
+    processed_root = args.processed_root
+    masks_root = args.masks_root or os.path.join(processed_root, 'processed/masks')
+    predictions_root = args.predictions_root or os.path.join(processed_root, 'predictions')
+    meta_root = args.meta_root or os.path.join(processed_root, 'processed/meta')
+    results_root = args.results_root or os.path.join(processed_root, 'evaluation')
+
     if not os.path.isdir(masks_root):
         raise FileNotFoundError(f'Rater masks not found: {masks_root}')
     if not os.path.isdir(predictions_root):
