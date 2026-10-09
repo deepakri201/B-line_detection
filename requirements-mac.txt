@@ -1,0 +1,45 @@
+# macOS, Python 3.11 (Apple Silicon or Intel).
+# This is the CPU/MPS stack. requirements.txt stays the paper's CUDA 10.2 environment.
+#
+#   python3.11 -m venv .venv
+#   source .venv/bin/activate
+#   pip install -r requirements-mac.txt
+#
+# GIF export also needs the gifsicle binary: brew install gifsicle
+#
+# Torch and torchvision are held here because 0.17+ removed the pretrained=
+# argument this repository passes to torchvision model constructors.
+# segmentation-models-pytorch is held at 0.2.1 because the released checkpoints
+# unpickle segmentation_models_pytorch.unet.model, which later releases moved.
+# scikit-image is held below 0.22 because label generation still passes selem=.
+
+numpy==1.26.4
+scipy==1.11.4
+matplotlib==3.8.4
+pandas==2.2.2
+Pillow==10.4.0
+imageio==2.34.2
+imageio-ffmpeg==0.5.1
+scikit-image==0.21.0
+scikit-learn==1.5.2
+natsort==8.4.0
+tqdm==4.66.5
+pygeoif==1.1.0
+polarTransform==2.0.0
+SimpleITK==2.4.1
+openpyxl==3.1.5
+pygifsicle==1.0.4
+python-pptx==1.0.2
+pydicom==3.0.2
+
+torch==2.1.2
+torchvision==0.16.2
+torchinfo==1.8.0
+efficientnet-pytorch==0.6.3
+pretrainedmodels==0.7.4
+timm==0.4.12
+segmentation-models-pytorch==0.2.1
+
+ttach==0.0.3
+opencv-python==4.10.0.84
+grad-cam==1.4.8
