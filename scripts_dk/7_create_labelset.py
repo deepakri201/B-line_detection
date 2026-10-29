@@ -1,9 +1,11 @@
 """
 Create the 2-channel segmentation labels and the CSV read by training_run.py.
 
-Positive labels are the rater's existing 4 mm origin masks, stored as
-background and foreground channels. Every negative frame in a split shares one
-empty label. Paths in the CSV are relative to intermediate/data/images.
+Pass --rater to use one annotator, or --all-raters to use the rater recorded
+for each clip by 5_create_splits.py. Positive labels are that rater's existing
+4 mm origin masks, stored as background and foreground channels. Every negative
+frame in a split shares one empty label. Paths in the CSV are relative to
+intermediate/data/images.
 
 Output layout (under project_root):
     intermediate/data/images/labelsets/frames_1_disk_4mm/{split}/pos/BEDLUS_{id1}_{id2}_{frame}_label.tiff
@@ -26,6 +28,7 @@ from natsort import natsorted
 processed_root = '/Users/dk422/Documents/LUS/AI4Ultrasound/B-LineDetection_Ruben/data/processed'
 project_root = '/Users/dk422/Documents/LUS/AI4Ultrasound/B-LineDetection_Ruben/lahey_training'
 rater = None
+all_raters = False
 
 dataset_name = 'frames_1'
 labelset_name = 'frames_1_disk_4mm'
@@ -90,6 +93,22 @@ def shared_frames(image_dir: str, mask_dir: str) -> list:
     return natsorted(image_names & mask_names)
 
 
+def clip_rater(entry: dict, stem: str, use_all_raters: bool, default_rater: str) -> str:
+    """
+    Args:
+        entry:  one split, including the rater recorded for each clip.
+        stem:  clip name.
+        use_all_raters:  True when each clip keeps the rater stored in the split.
+        default_rater:  annotator used for every clip when use_all_raters is False.
+
+    Returns:
+        name:  rater folder to read, or an empty string when none is available.
+    """
+    if use_all_raters:
+        return entry.get('stem_raters', {}).get(stem, '')
+    return default_rater or ''
+
+
 def read_mask(path: str) -> np.ndarray:
     """
     Args:
@@ -141,8 +160,13 @@ def main() -> None:
     parser = argparse.ArgumentParser(description='Create Lahey segmentation labels and the training CSV.')
     parser.add_argument('--processed-root', default=processed_root, help='Output directory of 1_preprocess_lahey.py.')
     parser.add_argument('--project-root', default=project_root, help='Project tree that training_run.py will use.')
-    parser.add_argument('--rater', default=rater, help='Annotator whose masks are the labels. Used when the split file does not record one.')
+    parser.add_argument('--rater', default=rater, help='Annotator whose masks are the labels.')
+    parser.add_argument('--all-raters', action='store_true', default=all_raters, help='Use the rater recorded for each clip in the split file.')
     args = parser.parse_args()
+    if args.all_raters and args.rater:
+        parser.error('Pass either --rater or --all-raters.')
+    if not args.all_raters and not args.rater:
+        parser.error('Pass --rater, or --all-raters to use the rater stored for each clip.')
 
     images_root = os.path.join(args.processed_root, 'images')
     masks_root = os.path.join(args.processed_root, 'masks')
@@ -151,6 +175,8 @@ def main() -> None:
             raise FileNotFoundError(f'{label} directory not found: {path}')
 
     splits = load_splits(args.project_root)
+    if args.all_raters and any('stem_raters' not in entry for entry in splits.values()):
+        raise ValueError('The split file has no per-clip rater. Recreate it with 5_create_splits.py --all-raters.')
     images_base = os.path.join(args.project_root, 'intermediate', 'data', 'images')
     label_root = os.path.join(images_base, 'labelsets', labelset_name)
     rows = {'split': [], 'b-lines_present': [], 'image_path': [], 'label_info': []}
@@ -161,7 +187,7 @@ def main() -> None:
         negative_label = None
         negative_relative = relative_path('labelsets', labelset_name, split_name, 'neg', 'negative_label.tiff')
         for stem in tqdm(entry['stems'], desc=split_name):
-            chosen = entry.get('stem_raters', {}).get(stem, args.rater)
+            chosen = clip_rater(entry, stem, args.all_raters, args.rater)
             image_dir = os.path.join(images_root, stem)
             mask_dir = os.path.join(masks_root, chosen, stem) if chosen else ''
             if not chosen or not os.path.isdir(image_dir) or not os.path.isdir(mask_dir):
