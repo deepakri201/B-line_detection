@@ -12,6 +12,7 @@ Output layout (under predictions_root):
 
 import os
 import sys
+import json
 import argparse
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
@@ -44,6 +45,10 @@ model_names = 'all'
 # foreground probability threshold, same default as the segmentation evaluation scripts
 prob_threshold = 0.50
 batch_size = 16
+
+# optional clip limit from 5_create_splits.py. Leave split_file empty to score every clip.
+split_file = None
+split_name = 'test'
 
 # run one segmentation experiment on one clip from one annotator and check the masks
 # command line: python scripts_dk/2_run_inference.py --test --rater andrew --model 0101_resnet18_unet_0
@@ -83,16 +88,41 @@ class FrameDataset(Dataset):
         return image
 
 
-def list_frames(root: str) -> list:
+def list_frames(root: str, stems: set = None) -> list:
     """
     Args:
         root:  images directory with one subdirectory per clip stem.
+        stems:  clip names to keep. None keeps every clip.
 
     Returns:
         paths:  naturally sorted PNG paths.
     """
     paths = glob(os.path.join(root, '*', 'frame_*.png'))
+    if stems is not None:
+        paths = [path for path in paths if os.path.basename(os.path.dirname(path)) in stems]
     return natsorted(paths)
+
+
+def stems_from_split(path: str, name: str) -> set:
+    """
+    Args:
+        path:  JSON split file written by 5_create_splits.py.
+        name:  split key to read, such as test or 0.
+
+    Returns:
+        stems:  clip names in that split.
+    """
+    if not os.path.isfile(path):
+        raise FileNotFoundError(f'Split file not found: {path}')
+    with open(path, 'r') as handle:
+        splits = json.load(handle)
+    if name not in splits:
+        available = ', '.join(sorted(splits))
+        raise KeyError(f'Split {name} is not in {path}. Available splits: {available}')
+    stems = splits[name].get('stems', [])
+    if not stems:
+        raise ValueError(f'Split {name} in {path} has no clips.')
+    return set(stems)
 
 
 def checkpoint_pairs(experiment_dir: str) -> tuple:
@@ -324,6 +354,8 @@ def main() -> None:
     parser.add_argument('--images-root', default=images_root, help='Directory of preprocessed clip folders.')
     parser.add_argument('--predictions-root', default=predictions_root, help='Directory for predicted masks.')
     parser.add_argument('--model-dir', default=model_dir, help='Directory of pixel-level segmentation checkpoints.')
+    parser.add_argument('--split-file', default=split_file, help='JSON split file. Omit to run on every clip.')
+    parser.add_argument('--split', default=split_name, help='Split key inside --split-file. Defaults to test.')
     parser.add_argument('--test', action='store_true', help='Run one model on one clip from one annotator and check the masks.')
     parser.add_argument('--model', default=test_model, help='Segmentation experiment to use with --test.')
     parser.add_argument('--rater', default=test_rater, help='Annotator to use with --test, for example andrew.')
@@ -359,9 +391,15 @@ def main() -> None:
     else:
         selected = list(model_names)
 
-    frame_paths = list_frames(images_root)
+    stems = stems_from_split(args.split_file, args.split) if args.split_file else None
+    frame_paths = list_frames(images_root, stems)
     if not frame_paths:
-        raise FileNotFoundError(f'No frames under {images_root}')
+        if stems is None:
+            raise FileNotFoundError(f'No frames under {images_root}')
+        raise FileNotFoundError(f'No frames for split {args.split} under {images_root}')
+    if stems is not None:
+        kept = len({os.path.basename(os.path.dirname(path)) for path in frame_paths})
+        print(f'Using {kept} clips from split {args.split}')
     print(f'{len(frame_paths)} frames, {len(selected)} models')
     os.makedirs(predictions_root, exist_ok=True)
 

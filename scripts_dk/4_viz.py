@@ -10,6 +10,7 @@ Output layout (under movies_root):
 """
 
 import os
+import json
 import argparse
 
 import numpy as np
@@ -35,6 +36,10 @@ overlay_alpha = 0.55
 ground_truth_color = (0, 220, 70)
 prediction_color = (255, 120, 0)
 panel_gap = 8
+
+# optional clip limit from 5_create_splits.py. Leave split_file empty to make a movie for every clip.
+split_file = None
+split_name = 'test'
 
 # write one movie for one model, rater, and clip
 # command line: python scripts_dk/4_make_clip_movies.py --test --rater andrew --model 0101_resnet18_unet_0
@@ -142,6 +147,28 @@ def shared_frames(stem: str, rater: str, model_name: str) -> list:
     return natsorted(names)
 
 
+def stems_from_split(path: str, name: str) -> set:
+    """
+    Args:
+        path:  JSON split file written by 5_create_splits.py.
+        name:  split key to read, such as test or 0.
+
+    Returns:
+        stems:  clip names in that split.
+    """
+    if not os.path.isfile(path):
+        raise FileNotFoundError(f'Split file not found: {path}')
+    with open(path, 'r') as handle:
+        splits = json.load(handle)
+    if name not in splits:
+        available = ', '.join(sorted(splits))
+        raise KeyError(f'Split {name} is not in {path}. Available splits: {available}')
+    stems = splits[name].get('stems', [])
+    if not stems:
+        raise ValueError(f'Split {name} in {path} has no clips.')
+    return set(stems)
+
+
 def write_movie(frames: list, path: str) -> None:
     """
     Args:
@@ -239,6 +266,8 @@ def main() -> None:
     parser.add_argument('--masks-root', default=masks_root, help='Directory of per-rater ground-truth masks.')
     parser.add_argument('--predictions-root', default=predictions_root, help='Directory of predicted masks.')
     parser.add_argument('--movies-root', default=movies_root, help='Directory for side-by-side movies.')
+    parser.add_argument('--split-file', default=split_file, help='JSON split file. Omit to make a movie for every clip.')
+    parser.add_argument('--split', default=split_name, help='Split key inside --split-file. Defaults to test.')
     parser.add_argument('--test', action='store_true', help='Write one movie for one model, rater, and clip.')
     parser.add_argument('--model', default=test_model, help='Prediction folder to use. Defaults to every available model.')
     parser.add_argument('--rater', default=test_rater, help='Annotator to use. Defaults to every rater.')
@@ -269,6 +298,9 @@ def main() -> None:
         raters = [name for name in raters if name.lower() == args.rater.lower()]
 
     written = 0
+    stems = stems_from_split(args.split_file, args.split) if args.split_file else None
+    if stems is not None:
+        print(f'Using {len(stems)} clips from split {args.split}')
     for model_name in models:
         clips = natsorted([
             name for name in os.listdir(os.path.join(predictions_root, model_name))
@@ -276,6 +308,8 @@ def main() -> None:
         ])
         if args.stem is not None:
             clips = [name for name in clips if name == args.stem]
+        if stems is not None:
+            clips = [name for name in clips if name in stems]
         for rater in raters:
             for stem in tqdm(clips, desc=f'{model_name}/{rater}'):
                 if not shared_frames(stem, rater, model_name):

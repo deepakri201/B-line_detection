@@ -41,6 +41,10 @@ results_root = os.path.join(processed_root, 'evaluation')
 # match distance used by evaluation/segmentation/3_instance_detection.py
 max_physical_distance_cm = 0.50
 
+# optional clip limit from 5_create_splits.py. Leave split_file empty to score every clip.
+split_file = None
+split_name = 'test'
+
 # --------------------------------------------------------------------------------------------------
 
 
@@ -218,6 +222,28 @@ def sheet_name(rater: str, used: set) -> str:
     return candidate
 
 
+def stems_from_split(path: str, name: str) -> set:
+    """
+    Args:
+        path:  JSON split file written by 5_create_splits.py.
+        name:  split key to read, such as test or 0.
+
+    Returns:
+        stems:  clip names in that split.
+    """
+    if not os.path.isfile(path):
+        raise FileNotFoundError(f'Split file not found: {path}')
+    with open(path, 'r') as handle:
+        splits = json.load(handle)
+    if name not in splits:
+        available = ', '.join(sorted(splits))
+        raise KeyError(f'Split {name} is not in {path}. Available splits: {available}')
+    stems = splits[name].get('stems', [])
+    if not stems:
+        raise ValueError(f'Split {name} in {path} has no clips.')
+    return set(stems)
+
+
 def load_meta() -> dict:
     """
     Returns:
@@ -231,11 +257,12 @@ def load_meta() -> dict:
     return meta
 
 
-def evaluate_model(model_name: str, meta: dict) -> None:
+def evaluate_model(model_name: str, meta: dict, stems: set = None) -> None:
     """
     Args:
         model_name:  prediction subdirectory.
         meta:  preprocessing sidecars keyed by stem.
+        stems:  clip names to score. None scores every clip.
     """
     prediction_dir = os.path.join(predictions_root, model_name)
     raters = natsorted([
@@ -251,6 +278,8 @@ def evaluate_model(model_name: str, meta: dict) -> None:
         reference_paths = natsorted(glob(os.path.join(rater_dir, '*', 'frame_*.png')))
         for reference_path in reference_paths:
             stem = os.path.basename(os.path.dirname(reference_path))
+            if stems is not None and stem not in stems:
+                continue
             filename = os.path.basename(reference_path)
             prediction_path = os.path.join(prediction_dir, stem, filename)
             if not os.path.exists(prediction_path):
@@ -327,6 +356,8 @@ def main() -> None:
     parser.add_argument('--predictions-root', default=None, help='Predicted masks. Defaults to {processed-root}/predictions.')
     parser.add_argument('--meta-root', default=None, help='Clip sidecars. Defaults to {processed-root}/processed/meta.')
     parser.add_argument('--results-root', default=None, help='Excel output. Defaults to {processed-root}/evaluation.')
+    parser.add_argument('--split-file', default=split_file, help='JSON split file. Omit to score every clip.')
+    parser.add_argument('--split', default=split_name, help='Split key inside --split-file. Defaults to test.')
     args = parser.parse_args()
     processed_root = args.processed_root
     masks_root = args.masks_root or os.path.join(processed_root, 'processed/masks')
@@ -339,6 +370,10 @@ def main() -> None:
     if not os.path.isdir(predictions_root):
         raise FileNotFoundError(f'Predictions not found: {predictions_root}')
 
+    stems = stems_from_split(args.split_file, args.split) if args.split_file else None
+    if stems is not None:
+        print(f'Scoring {len(stems)} clips from split {args.split}')
+
     meta = load_meta()
     model_names = natsorted([
         name for name in os.listdir(predictions_root)
@@ -348,7 +383,7 @@ def main() -> None:
         raise FileNotFoundError(f'No model folders under {predictions_root}')
 
     for model_name in model_names:
-        evaluate_model(model_name, meta)
+        evaluate_model(model_name, meta, stems)
 
 
 if __name__ == '__main__':
