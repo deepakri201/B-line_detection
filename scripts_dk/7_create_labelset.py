@@ -141,12 +141,12 @@ def main() -> None:
     parser = argparse.ArgumentParser(description='Create Lahey segmentation labels and the training CSV.')
     parser.add_argument('--processed-root', default=processed_root, help='Output directory of 1_preprocess_lahey.py.')
     parser.add_argument('--project-root', default=project_root, help='Project tree that training_run.py will use.')
-    parser.add_argument('--rater', default=rater, required=rater is None, help='Annotator whose masks are the labels.')
+    parser.add_argument('--rater', default=rater, help='Annotator whose masks are the labels. Used when the split file does not record one.')
     args = parser.parse_args()
 
     images_root = os.path.join(args.processed_root, 'images')
-    masks_root = os.path.join(args.processed_root, 'masks', args.rater)
-    for path, label in ((images_root, 'images'), (masks_root, f'masks for {args.rater}')):
+    masks_root = os.path.join(args.processed_root, 'masks')
+    for path, label in ((images_root, 'images'), (masks_root, 'masks')):
         if not os.path.isdir(path):
             raise FileNotFoundError(f'{label} directory not found: {path}')
 
@@ -161,10 +161,11 @@ def main() -> None:
         negative_label = None
         negative_relative = relative_path('labelsets', labelset_name, split_name, 'neg', 'negative_label.tiff')
         for stem in tqdm(entry['stems'], desc=split_name):
+            chosen = entry.get('stem_raters', {}).get(stem, args.rater)
             image_dir = os.path.join(images_root, stem)
-            mask_dir = os.path.join(masks_root, stem)
-            if not os.path.isdir(image_dir) or not os.path.isdir(mask_dir):
-                print(f'Warning: skipping {stem}, which has no image or {args.rater} mask folder.')
+            mask_dir = os.path.join(masks_root, chosen, stem) if chosen else ''
+            if not chosen or not os.path.isdir(image_dir) or not os.path.isdir(mask_dir):
+                print(f'Warning: skipping {stem}, which has no image or mask folder.')
                 continue
             id1, id2 = stem_ids(stem)
             for frame_name in shared_frames(image_dir, mask_dir):
