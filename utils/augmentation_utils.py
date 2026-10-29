@@ -244,10 +244,14 @@ def affine_transform(X, y, settings):
         augmentation_transform = AffineTransform(scale=scale_factor, shear=shear_rad, rotation=rotation_rad) 
         transform = centered_transform(origin, augmentation_transform)
         # apply the transformation
-        X_transformed = torch.from_numpy(warp(X.permute(1, 2, 0), inverse_map=transform)).permute(2, 0, 1)
+        # scikit-image 0.22 leaves order-0 inputs unconverted, then calls np.min on them.
+        # A torch tensor fails that call, so both arrays are converted to numpy first.
+        X_image = np.ascontiguousarray(X.detach().cpu().permute(1, 2, 0).numpy())
+        X_transformed = torch.from_numpy(warp(X_image, inverse_map=transform)).permute(2, 0, 1)
         if isinstance(y, torch.Tensor):
-            order = 0 if set(y.ravel().tolist()) == {0.0, 1.0} else 3 # account for interpolation for binary images
-            y_transformed = torch.from_numpy(warp(y.permute(1, 2, 0), inverse_map=transform, order=order, mode='edge')).permute(2, 0, 1)
+            y_image = np.ascontiguousarray(y.detach().cpu().permute(1, 2, 0).numpy())
+            order = 0 if set(np.unique(y_image).tolist()) == {0.0, 1.0} else 3 # account for interpolation for binary images
+            y_transformed = torch.from_numpy(warp(y_image, inverse_map=transform, order=order, mode='edge')).permute(2, 0, 1)
         else:
             y_transformed = y
     else:
