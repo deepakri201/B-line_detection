@@ -9,16 +9,14 @@ Each row uses the same fields as the settings dict in
 network_training/single_training_run.py, plus a finished column. Rows with
 finished true are skipped. After a run, finished is set to true and the start
 time, end time, and best validation loss are written back into the spreadsheet.
-The experiment log is still intermediate/models/experiment_log.csv.
+The experiment log is written to {project_root}/intermediate/models/experiment_log.csv.
+Each run is saved in {project_root}/intermediate/models/{ID}_{name}_{val_fold}.
 
 aug_settings, focal_class_weights, and loss_weights must be Python literals.
 The output folder is {ID}_{name}_{val_fold} and training_run refuses to
 overwrite an existing folder.
 
-Run from anywhere. utils/config.py project_root must already point at the
-training project.
-
-    python scripts_dk/8_scheduled_training_runs.py --schedule /path/to/training_runs.xlsx
+    python scripts_dk/8_scheduled_training_runs.py --schedule /path/to/training_runs.xlsx --project-root /path/to/lahey_training
 """
 
 import os
@@ -29,8 +27,9 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 import numpy as np
 import pandas as pd
 
-from utils.config import models_folder
-from network_training.training_run import training_run
+
+# same default project tree as scripts_dk/5_create_splits.py
+project_root = '/Users/dk422/Documents/LUS/AI4Ultrasound/B-LineDetection_Ruben/lahey_training'
 
 
 def as_bool(value) -> bool:
@@ -110,10 +109,11 @@ def settings_from_row(row: dict) -> dict:
     return settings
 
 
-def append_experiment_log(settings: dict) -> None:
+def append_experiment_log(settings: dict, models_folder: str) -> None:
     """
     Args:
         settings:  finished run, including start time, end time, and best validation loss.
+        models_folder:  directory under the project root where trained networks are stored.
     """
     overview_path = os.path.join(models_folder, 'experiment_log.csv')
     if os.path.exists(overview_path):
@@ -130,7 +130,16 @@ def append_experiment_log(settings: dict) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description='Train every unfinished row in a schedule spreadsheet.')
     parser.add_argument('--schedule', required=True, help='Excel file of training runs. Unfinished rows are trained in order.')
+    parser.add_argument('--project-root', default=project_root, help='Project tree. Models are written to intermediate/models under this path.')
     args = parser.parse_args()
+
+    # training_run and ImageDataset read these paths at import time
+    os.environ['BEDLUS_PROJECT_ROOT'] = os.path.abspath(args.project_root)
+    if not os.path.isdir(os.environ['BEDLUS_PROJECT_ROOT']):
+        raise FileNotFoundError(f'Project root not found: {os.environ["BEDLUS_PROJECT_ROOT"]}')
+    from utils.config import models_folder
+    from network_training.training_run import training_run
+    os.makedirs(models_folder, exist_ok=True)
 
     schedule_path = os.path.abspath(args.schedule)
     if not os.path.isfile(schedule_path):
@@ -155,7 +164,7 @@ def main() -> None:
         settings['start_run'] = start_run.strftime('%m/%d/%Y %H:%M:%S')
         settings['end_run'] = end_run.strftime('%m/%d/%Y %H:%M:%S')
         settings['best_val_loss'] = prev_best_loss
-        append_experiment_log(settings)
+        append_experiment_log(settings, models_folder)
 
         schedule_dict['finished'][idx] = True
         schedule_dict['start_run'][idx] = settings['start_run']

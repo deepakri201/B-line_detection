@@ -7,6 +7,10 @@ import os
 folders = []
 project_root = None # change to project root path
 
+# scripts_dk/8_scheduled_training_runs.py sets this before importing this module
+if os.environ.get('BEDLUS_PROJECT_ROOT'):
+    project_root = os.environ['BEDLUS_PROJECT_ROOT']
+
 if project_root == None:
     raise ValueError('First specify the project root')
     
