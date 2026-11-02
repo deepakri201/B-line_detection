@@ -12,10 +12,17 @@ import torch
 import torchvision
 import torch.nn as nn
 import segmentation_models_pytorch as smp
+from segmentation_models_pytorch.encoders import encoders
 from torchinfo import summary
 
 from models.unet import UNet
 from utils.model_utils import initialize
+
+# pretrainedmodels hosts this checkpoint at data.lip6.fr, which times out.
+# The encoder's load_state_dict accepts the official torchvision file.
+encoders['densenet121']['pretrained_settings']['imagenet']['url'] = (
+    'https://download.pytorch.org/models/densenet121-a639ec97.pth'
+)
 
 
 def get_segmentation_model(
