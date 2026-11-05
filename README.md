@@ -76,6 +76,41 @@ Network training details can be configured for a single training run in `single_
 
 The evaluation folder contains all code that was used for the evaluation, separated in subfolders for each level.
 
+### Preparing the Lahey Training Set
+Run these three scripts in order. `--project-root` is the training project, and `--processed-root` is the output of `scripts_dk/1_preprocess_lahey.py`. Pass `--all-raters` to use every annotated clip, or `--rater` and a rater name instead. Each patient stays in one split.
+
+Create the train, validation, and test splits:
+```
+python scripts_dk/5_create_splits.py \
+    --processed-root /path/to/processed \
+    --project-root /path/to/lahey_training \
+    --all-raters
+```
+
+Copy the frames into positive and negative folders. A frame is positive when its mask contains a B-line origin:
+```
+python scripts_dk/6_create_dataset.py \
+    --processed-root /path/to/processed \
+    --project-root /path/to/lahey_training \
+    --all-raters
+```
+
+Write the segmentation labels and the CSV that training reads:
+```
+python scripts_dk/7_create_labelset.py \
+    --processed-root /path/to/processed \
+    --project-root /path/to/lahey_training \
+    --all-raters
+```
+
+### Running Scheduled Training
+Each row of the spreadsheet is one model and one validation fold. `scripts_dk/8_scheduled_training_runs.py` trains every row whose `finished` cell is false and writes the networks to `{project-root}/intermediate/models/{ID}_{name}_{val_fold}/`:
+```
+python scripts_dk/8_scheduled_training_runs.py \
+    --schedule /path/to/training_runs.xlsx \
+    --project-root /path/to/lahey_training
+```
+
 ### Creating an Ensemble Folder
 `scripts_dk/9_create_ensemble_folder.py` combines the trained fold models of one architecture into a single ensemble folder. Pass the model folders in the order they should be numbered:
 ```
@@ -85,6 +120,19 @@ python scripts_dk/9_create_ensemble_folder.py \
     --project-root /path/to/lahey_training
 ```
 The script reads `{project-root}/intermediate/models/{model}/model.pth` and `experiment_settings.pkl`, copies them to `{project-root}/intermediate/models/{ensemble-name}/` as `model_0.pth`, `model_1.pth`, and so on, and writes `model_origins.csv`. It stops if the ensemble folder already exists or if the selected models were trained with different labels. Use `--models-dir` to point at a models directory other than `{project-root}/intermediate/models`.
+
+### Running Inference for One Ensemble
+`scripts_dk/2_run_inference.py` loads every `model_*.pth` in the ensemble folder, averages the foreground probabilities, and writes one mask per frame. Pass `--ensemble` and set `--model-dir` to that folder:
+```
+python scripts_dk/2_run_inference.py \
+    --ensemble \
+    --model-dir /path/to/lahey_training/intermediate/models/ensemble_resnet18_unet \
+    --images-root /path/to/processed/images \
+    --predictions-root /path/to/data/predictions \
+    --split-file /path/to/lahey_training/intermediate/data/info/dataset_split_dictionary.json \
+    --split test
+```
+Masks are written to `{predictions-root}/ensemble_resnet18_unet/{clip}/`. `--split test` limits the run to the held-out clips. Omit `--split-file` to run on every clip. Without `--ensemble`, `--model-dir` is the parent of the experiment folders and every subdirectory is run.
 
 ### Writing Model Summaries
 `scripts_dk/10_model_information.py` writes a torchinfo architecture summary next to each checkpoint in the selected folders. Pass one folder, several folders, or `all` for every folder in the models directory:

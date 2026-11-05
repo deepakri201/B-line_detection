@@ -8,6 +8,17 @@ thresholded and written as an 8-bit mask.
 
 Output layout (under predictions_root):
     {model_name}/{stem}/frame_{index:03d}.png
+
+Pass --ensemble when --model-dir is the ensemble folder itself. That folder
+holds model_0.pth, model_1.pth, and the matching settings files. Without
+--ensemble, --model-dir is the parent of one folder per experiment.
+
+    python scripts_dk/2_run_inference.py --ensemble \
+        --model-dir /path/to/ensemble_densenet121_unet \
+        --images-root /path/to/processed/images \
+        --predictions-root /path/to/predictions \
+        --split-file /path/to/dataset_split_dictionary.json \
+        --split test
 """
 
 import os
@@ -353,7 +364,8 @@ def main() -> None:
     parser = argparse.ArgumentParser(description='Run segmentation inference on preprocessed Lahey frames.')
     parser.add_argument('--images-root', default=images_root, help='Directory of preprocessed clip folders.')
     parser.add_argument('--predictions-root', default=predictions_root, help='Directory for predicted masks.')
-    parser.add_argument('--model-dir', default=model_dir, help='Directory of pixel-level segmentation checkpoints.')
+    parser.add_argument('--model-dir', default=model_dir, help='Directory of experiment folders. With --ensemble, this is the ensemble folder itself.')
+    parser.add_argument('--ensemble', action='store_true', help='Run the one ensemble folder given by --model-dir. It contains model_*.pth directly.')
     parser.add_argument('--split-file', default=split_file, help='JSON split file. Omit to run on every clip.')
     parser.add_argument('--split', default=split_name, help='Split key inside --split-file. Defaults to test.')
     parser.add_argument('--test', action='store_true', help='Run one model on one clip from one annotator and check the masks.')
@@ -363,8 +375,10 @@ def main() -> None:
     args = parser.parse_args()
     images_root = args.images_root
     predictions_root = args.predictions_root
-    model_dir = args.model_dir
+    model_dir = os.path.abspath(args.model_dir)
     run_test = args.test or test_one_clip
+    if args.ensemble and run_test:
+        parser.error('Pass either --ensemble or --test.')
 
     if not os.path.isdir(images_root):
         raise FileNotFoundError(f'Preprocessed images not found: {images_root}')
@@ -373,6 +387,14 @@ def main() -> None:
 
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     print(f'Using {device} device')
+
+    if args.ensemble:
+        names, _settings_names = checkpoint_pairs(model_dir)
+        if not names:
+            raise FileNotFoundError(f'No checkpoints in ensemble folder: {model_dir}')
+        selected = [os.path.basename(model_dir)]
+        model_dir = os.path.dirname(model_dir)
+        print(f'Ensemble {selected[0]}: averaging {len(names)} checkpoints')
 
     if run_test:
         model_name = select_test_model(args.model)
@@ -384,12 +406,13 @@ def main() -> None:
         check_test_output(model_name, stem, frame_paths, destination)
         return
 
-    if model_names == 'all':
-        selected = [name for name in os.listdir(model_dir) if os.path.isdir(os.path.join(model_dir, name))]
-    elif isinstance(model_names, str):
-        selected = [model_names]
-    else:
-        selected = list(model_names)
+    if not args.ensemble:
+        if model_names == 'all':
+            selected = [name for name in os.listdir(model_dir) if os.path.isdir(os.path.join(model_dir, name))]
+        elif isinstance(model_names, str):
+            selected = [model_names]
+        else:
+            selected = list(model_names)
 
     stems = stems_from_split(args.split_file, args.split) if args.split_file else None
     frame_paths = list_frames(images_root, stems)
