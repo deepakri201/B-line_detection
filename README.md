@@ -76,6 +76,25 @@ Network training details can be configured for a single training run in `single_
 
 The evaluation folder contains all code that was used for the evaluation, separated in subfolders for each level.
 
+### Creating an Ensemble Folder
+`scripts_dk/9_create_ensemble_folder.py` combines the trained fold models of one architecture into a single ensemble folder. Pass the model folders in the order they should be numbered:
+```
+python scripts_dk/9_create_ensemble_folder.py \
+    --models 0101_resnet18_unet_0 0102_resnet18_unet_1 0103_resnet18_unet_2 0104_resnet18_unet_3 0105_resnet18_unet_4 \
+    --ensemble-name ensemble_resnet18_unet \
+    --project-root /path/to/lahey_training
+```
+The script reads `{project-root}/intermediate/models/{model}/model.pth` and `experiment_settings.pkl`, copies them to `{project-root}/intermediate/models/{ensemble-name}/` as `model_0.pth`, `model_1.pth`, and so on, and writes `model_origins.csv`. It stops if the ensemble folder already exists or if the selected models were trained with different labels. Use `--models-dir` to point at a models directory other than `{project-root}/intermediate/models`.
+
+### Writing Model Summaries
+`scripts_dk/10_model_information.py` writes a torchinfo architecture summary next to each checkpoint in the selected folders. Pass one folder, several folders, or `all` for every folder in the models directory:
+```
+python scripts_dk/10_model_information.py \
+    --models ensemble_resnet18_unet \
+    --project-root /path/to/lahey_training
+```
+For each `model*.pth` it writes `model_N_summary.txt` in that folder. The input size defaults to `256 384`; use `--output-shape HEIGHT WIDTH` if your frames differ. `--models-dir` works here too.
+
 ## Citing
 If you found our work useful in your research, please consider citing our paper:
 ```
