@@ -55,6 +55,13 @@ which is already available in the supplementary pkl-files.
 ## Dataset Generation
 From the preprocessed frames, datasets with labels or annotations can be created for training deep neural networks at the level of multi-frame clips, single frames, and individual pixels (i.e., segmentation). 
 The dataset split is already provided in one of the supplementary files.
+
+Each expert annotation is a line. Training uses only the upper end of that line, the B-line origin at the pleura, drawn as a disk 4 mm across on the processed frame. The example below is Case-001, clip 3, frame 0 from `B-line_expert_annotation.csv`.
+
+<div align="center">
+  <img width="100%" alt="Expert B-line lines converted to 4 mm origin disks" src=".github/annotation_to_label.png">
+</div>
+
 1. Specify the dataset type in `2_create_dataset.py`: 
     - `frames = 1` for frame-level and pixel-level
     - `frames = 16` for clip-level
@@ -142,6 +149,33 @@ python scripts_dk/10_model_information.py \
     --project-root /path/to/lahey_training
 ```
 For each `model*.pth` it writes `model_N_summary.txt` in that folder. The input size defaults to `256 384`; use `--output-shape HEIGHT WIDTH` if your frames differ. `--models-dir` works here too.
+
+### Evaluating Predictions
+`scripts_dk/3_evaluate.py` compares every prediction folder under `--predictions-root` with each rater's masks. Each folder gets one Excel file in `--results-root` with a summary sheet, a per-clip sheet, and one frame-level sheet per rater. `--split-file` and `--split test` restrict scoring to the held-out clips:
+```
+python scripts_dk/3_evaluate.py \
+    --processed-root /path/to/data \
+    --masks-root /path/to/data/processed/masks \
+    --predictions-root /path/to/lahey_training/predictions \
+    --meta-root /path/to/data/processed/meta \
+    --results-root /path/to/lahey_training/evaluation \
+    --split-file /path/to/lahey_training/intermediate/data/info/dataset_split_dictionary.json \
+    --split test
+```
+Only `--processed-root` is required; each other path defaults to a subfolder of it (`processed/masks`, `predictions`, `processed/meta`, and `evaluation`). Set the other paths only when your layout differs.
+
+### Making Side-by-Side Movies
+`scripts_dk/4_viz.py` writes one MP4 per clip and rater. The left panel shows the rater's mask in green and the right panel shows the predicted mask in orange. Pass `--split-file` and `--split test` to make movies only for the held-out clips:
+```
+python scripts_dk/4_viz.py \
+    --images-root /path/to/data/processed/images \
+    --masks-root /path/to/data/processed/masks \
+    --predictions-root /path/to/lahey_training/predictions \
+    --movies-root /path/to/lahey_training/viz \
+    --split-file /path/to/lahey_training/intermediate/data/info/dataset_split_dictionary.json \
+    --split test
+```
+Movies are written to `{movies-root}/{model}/{rater}/{stem}.mp4`. To make one movie while checking the setup, add `--test --model ensemble_resnet18_unet --rater andrew --stem <clip>`.
 
 ## Citing
 If you found our work useful in your research, please consider citing our paper:
